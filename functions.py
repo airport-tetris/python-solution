@@ -55,6 +55,7 @@ def check_wide_time(start_time_value, finish_time_value, mc, air, data_mc):
         data_mc[mc]['time_used'].append({'type_vc': air['air_classes'], 'start':start_time_value, 'finish':finish_time_value})
         data_mc[mc]['time_used'].sort(key=lambda d: d['start']) 
         return True
+    
     for i, j in enumerate(data_mc[mc]['time_used']):
         first_flag = start_time_value > j['finish']
         second_flag = finish_time_value < j['start']
@@ -108,8 +109,7 @@ def min_cost(table_cost_pop_v):
             mc = i
     return mc, min_cost_value
 
-
-def choice_mc(air, id, data_handing_time, table_cost_values, data_air_stands, data_mc):
+def choice_mc(air, ind, data_handing_time, table_cost_values, data_air_stands, data_mc):
     flag_wide = False
     flag_continue_wide = False
     handiing_time_jet = data_handing_time.JetBridge_Handling_Time[data_handing_time.Aircraft_Class == air['air_classes']].values[0]
@@ -118,80 +118,68 @@ def choice_mc(air, id, data_handing_time, table_cost_values, data_air_stands, da
     if air['air_classes'] == 'Wide_Body':
         flag_wide = True
   
-    table_cost_pop = table_cost_values[id].copy()
+    table_cost_pop = table_cost_values[ind].copy()
+    print(ind, ' ', len(table_cost_pop))
     opt_mc, opt_min_cost_value = min_cost(table_cost_pop)
     air['opt_mc'] = opt_mc
     air['opt_min_cost_value'] = opt_min_cost_value
 
     while pd.isnull(air['Aircraft_Stand']):
-
+        count = count + 1
+        flag_check_sosed = False           
+        flag_check_time = False
+        flag_wrong_id = False
+        flag_wrong_term  = False
+            
         mc, min_cost_value = min_cost(table_cost_pop)
         mc_taxiing = data_air_stands.Taxiing_Time[data_air_stands.Aircraft_Stand == mc].values[0]
-
-        if air['flight_AD'] == 'D':
-            flight_datetime_start_jet = air['flight_datetime'] - datetime.timedelta(minutes=int(handiing_time_jet)) - datetime.timedelta(minutes=int(mc_taxiing))
-            flight_datetime_start_away = air['flight_datetime'] - datetime.timedelta(minutes=int(handiing_time_away)) - datetime.timedelta(minutes=int(mc_taxiing))
-            flight_datetime_finish = air['flight_datetime'] - datetime.timedelta(minutes=int(mc_taxiing))
+        
+        isDepart = air['flight_AD'] == 'D'
+        isAway = data_mc[mc]['type_mc'] == 10
+        handling_time = handiing_time_away if isAway else handiing_time_jet
+        
+        if isDepart:
+            flight_datetime_start = air['flight_datetime'] - datetime.timedelta(minutes=int(handling_time)) - datetime.timedelta(minutes=int(mc_taxiing))
         else:
             flight_datetime_start = air['flight_datetime'] + datetime.timedelta(minutes=int(mc_taxiing))
-            flight_datetime_finish_jet = air['flight_datetime'] + datetime.timedelta(minutes=int(handiing_time_jet)) + datetime.timedelta(minutes=int(mc_taxiing))
-            flight_datetime_finish_away = air['flight_datetime'] + datetime.timedelta(minutes=int(handiing_time_away)) + datetime.timedelta(minutes=int(mc_taxiing))
-         
-        if air['flight_AD'] == 'D':
-            if air['flight_ID'] == data_mc[mc]['JetBridge_on_Departure']:
-                if check_wide_time(flight_datetime_start_jet, flight_datetime_finish, mc, air, data_mc) & (data_mc[mc]['type_mc'] != 10):
-                    if check_sosed_time(flight_datetime_start_jet, flight_datetime_finish, mc, air, data_mc):
-                        if air['flight_terminal_#'] == data_mc[mc]['type_mc']:
-                            air['Aircraft_Stand'] = mc
-                            air['type_mc'] = 'jetbridge'
-                            air['flight_datetime_start'] = flight_datetime_start_jet
-                            air['flight_datetime_finish'] = flight_datetime_finish
-                            air['C_vc'] = min_cost_value
-                            data_mc[mc]['C_vc'] = min_cost_value
-                            data_mc[mc]['index'] = id
-                            return air
-            elif check_wide_time(flight_datetime_start_away, flight_datetime_finish, mc, air, data_mc) & (data_mc[mc]['type_mc'] == 10):
-                if check_sosed_time(flight_datetime_start_away, flight_datetime_finish, mc, air, data_mc):
-                    air['Aircraft_Stand'] = mc
-                    air['type_mc'] = 'away'
-                    air['flight_datetime_start'] = flight_datetime_start_away
-                    air['flight_datetime_finish'] = flight_datetime_finish
-                    air['C_vc'] = min_cost_value
-                    data_mc[mc]['C_vc'] = min_cost_value
-                    data_mc[mc]['index'] = id
-                    return air
-        else:
-            if air['flight_ID'] == data_mc[mc]['JetBridge_on_Arrival']:
-                if check_wide_time(flight_datetime_start, flight_datetime_finish_jet, mc, air, data_mc) & (data_mc[mc]['type_mc'] != 10):
-                    if check_sosed_time(flight_datetime_start, flight_datetime_finish_jet, mc, air, data_mc):
-                        if air['flight_terminal_#'] == data_mc[mc]['type_mc']:
-                            air['Aircraft_Stand'] = mc
-                            air['type_mc'] = 'jetbridge'
-                            air['flight_datetime_start'] = flight_datetime_start
-                            air['flight_datetime_finish'] = flight_datetime_finish_jet
-                            air['C_vc'] = min_cost_value
-                            data_mc[mc]['C_vc'] = min_cost_value
-                            data_mc[mc]['index'] = id
-                            return air
-            elif check_wide_time(flight_datetime_start, flight_datetime_finish_away, mc, air, data_mc) & (data_mc[mc]['type_mc'] == 10):
-                if check_sosed_time(flight_datetime_start, flight_datetime_finish_away, mc, air, data_mc):
-                    air['Aircraft_Stand'] = mc
-                    air['type_mc'] = 'away'
-                    air['flight_datetime_start'] = flight_datetime_start
-                    air['flight_datetime_finish'] = flight_datetime_finish_away
-                    air['C_vc'] = min_cost_value
-                    data_mc[mc]['C_vc'] = min_cost_value
-                    data_mc[mc]['index'] = id
-                    return air
+        flight_datetime_finish =  flight_datetime_start + datetime.timedelta(minutes=int(handling_time))
+        
+        keyID = 'JetBridge_on_Departure' if isDepart else 'JetBridge_on_Arrival'
+        if (isAway or (air['flight_terminal_#'] == data_mc[mc]['type_mc'])):
+            if (isAway or (air['flight_ID'] == data_mc[mc][keyID])):
+                if check_wide_time(flight_datetime_start, flight_datetime_finish, mc, air, data_mc):
+                    if check_sosed_time(flight_datetime_start, flight_datetime_finish, mc, air, data_mc):
+                        air['Aircraft_Stand'] = mc
+                        air['type_mc'] = 'away' if isAway else 'jetbridge' 
+                        air['flight_datetime_start'] = flight_datetime_start
+                        air['flight_datetime_finish'] = flight_datetime_finish
+                        air['C_vc'] = min_cost_value
+                        data_mc[mc]['C_vc'] = min_cost_value
+                        data_mc[mc]['index'] = ind
+                        print('air',ind ,' skipped ',count)
+                        return air
+                    else:
+                        flag_check_sosed = True
+                else:
+                    flag_check_time = True
+            else:
+                flag_wrong_id = True
+        else: 
+            flag_wrong_term  = True
+#         if ind == 590:
+#             print(flag_wrong_term,flag_wrong_id, flag_check_time, flag_check_sosed)
+#             print(data_mc[mc], min_cost_value)
+#             print(len(table_cost_pop))
+            
         table_cost_pop.pop(mc)
-
-
 def result(data, table_cost_values, data_air_stands, data_mc, data_handing_time):
+    data_mc = {i[0]:{'type_mc': i[8], 'JetBridge_on_Arrival': i[1], 'JetBridge_on_Departure': i[2], 'time_used':[], 'index':0, 'C_vc':0, 'sosedi':i[-1]} for i in data_air_stands.values}
+    wide = []
     mc_air = []
-    for id in data.index.values:
-        air = list(data[data.index == id].to_dict('index').values())[0]
-        air = choice_mc(air, id, data_handing_time, table_cost_values, data_air_stands, data_mc)
-        air['index'] = id
+    for ind in data.index.values:
+        air = list(data[data.index == ind].to_dict('index').values())[0]
+        air = choice_mc(air, ind, data_handing_time, table_cost_values, data_air_stands, data_mc)
+        air['index'] = ind
         mc_air.append(air)
     return mc_air
 
